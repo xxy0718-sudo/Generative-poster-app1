@@ -1,85 +1,117 @@
 import streamlit as st
 import requests
 
-# -----------------------------
-# 🌍 Page Setup
-# -----------------------------
-st.set_page_config(page_title="Hyeongwol's Global Art Explorer", layout="centered")
-
-st.title("🎨 Hyeongwol's Global Art Explorer")
-st.markdown("Explore artworks from world-famous museums using open APIs.")
-
-# -----------------------------
-# 🎛️ Museum Selection
-# -----------------------------
-museum = st.selectbox(
-    "Choose a Museum:",
-    ["Metropolitan Museum of Art (New York)", "Rijksmuseum (Netherlands)", "Harvard Art Museums (USA)"]
+# -------------------------------
+# 🎨 Page Configuration
+# -------------------------------
+st.set_page_config(
+    page_title="Hyeongwol's Art Explorer",
+    page_icon="🖼️",
+    layout="wide",
 )
 
-query = st.text_input("🔍 Search for Artworks:", "flower")
+st.title("🖼️ Hyeongwol's Global Art Explorer")
+st.markdown("Explore masterpieces from **MET**, **Harvard**, and **Rijksmuseum** using public Open APIs.")
 
-# -----------------------------
-# 🏛️ MET Museum
-# -----------------------------
-if museum == "Metropolitan Museum of Art (New York)" and query:
-    st.subheader("🗽 MET Museum Results")
-    search_url = f"https://collectionapi.metmuseum.org/public/collection/v1/search?q={query}"
-    response = requests.get(search_url).json()
+# -------------------------------
+# 🔍 Search Input
+# -------------------------------
+query = st.text_input("Enter a keyword to search artworks:", "flower")
 
-    if response["total"] == 0:
-        st.warning("No artworks found at the MET.")
+if not query:
+    st.info("Please enter a keyword to start searching.")
+    st.stop()
+
+# -------------------------------
+# 🎨 Display helper
+# -------------------------------
+def show_artwork_card(title, artist, year, image, museum_name):
+    with st.container():
+        st.markdown(f"### {title}")
+        if image:
+            st.image(image, use_container_width=True)
+        else:
+            st.info("No image available for this artwork.")
+        st.markdown(f"**Artist:** {artist or 'Unknown'}")
+        st.markdown(f"**Year:** {year or 'Unknown'}")
+        st.caption(f"🏛️ Source: {museum_name}")
+        st.divider()
+
+# -------------------------------
+# 🏛️ MET Museum API
+# -------------------------------
+st.header("🏙️ The Metropolitan Museum of Art (MET)")
+met_url = f"https://collectionapi.metmuseum.org/public/collection/v1/search?q={query}"
+
+try:
+    met_data = requests.get(met_url, timeout=10).json()
+    object_ids = met_data.get("objectIDs") or []
+
+    if not object_ids:
+        st.warning("No artworks found in MET Museum.")
     else:
-        for object_id in response["objectIDs"][:5]:
-            data = requests.get(f"https://collectionapi.metmuseum.org/public/collection/v1/objects/{object_id}").json()
-            st.image(data.get("primaryImageSmall"), width=300)
-            st.markdown(f"**Title:** {data.get('title', 'Untitled')}")
-            st.markdown(f"**Artist:** {data.get('artistDisplayName', 'Unknown')}")
-            st.markdown(f"**Year:** {data.get('objectDate', 'Unknown')}")
-            st.markdown(f"**Medium:** {data.get('medium', 'Unknown')}")
-            st.divider()
+        for obj_id in object_ids[:3]:
+            data = requests.get(
+                f"https://collectionapi.metmuseum.org/public/collection/v1/objects/{obj_id}",
+                timeout=10
+            ).json()
+            show_artwork_card(
+                data.get("title"),
+                data.get("artistDisplayName"),
+                data.get("objectDate"),
+                data.get("primaryImageSmall"),
+                "MET Museum"
+            )
+except Exception as e:
+    st.error(f"⚠️ MET API error: {e}")
 
-# -----------------------------
-# 🇳🇱 Rijksmuseum
-# -----------------------------
-elif museum == "Rijksmuseum (Netherlands)" and query:
-    st.subheader("🇳🇱 Rijksmuseum Results")
-    api_key = "0fiuZFh4"  # public demo key
-    url = f"https://www.rijksmuseum.nl/api/en/collection?key={api_key}&q={query}&imgonly=True"
-    response = requests.get(url).json()
+# -------------------------------
+# 🏛️ Harvard Art Museums API
+# -------------------------------
+st.header("🎓 Harvard Art Museums")
+harvard_api_key = "apikey=DEMO_KEY"  # You can replace this with your own key
+harvard_url = f"https://api.harvardartmuseums.org/object?{harvard_api_key}&title={query}&size=3"
 
-    if "artObjects" not in response or len(response["artObjects"]) == 0:
-        st.warning("No artworks found at the Rijksmuseum.")
+try:
+    harvard_data = requests.get(harvard_url, timeout=10).json()
+    records = harvard_data.get("records", [])
+    if not records:
+        st.warning("No artworks found in Harvard Museum.")
     else:
-        for item in response["artObjects"][:5]:
-            st.image(item.get("webImage", {}).get("url"), width=300)
-            st.markdown(f"**Title:** {item.get('title', 'Untitled')}")
-            st.markdown(f"**Artist:** {item.get('principalOrFirstMaker', 'Unknown')}")
-            st.markdown(f"**Link:** [View on Rijksmuseum Website]({item.get('links', {}).get('web')})")
-            st.divider()
+        for record in records:
+            show_artwork_card(
+                record.get("title"),
+                record.get("people", [{}])[0].get("name") if record.get("people") else "Unknown",
+                record.get("dated"),
+                record.get("primaryimageurl"),
+                "Harvard Art Museums"
+            )
+except Exception as e:
+    st.error(f"⚠️ Harvard API error: {e}")
 
-# -----------------------------
-# 🏫 Harvard Art Museums
-# -----------------------------
-elif museum == "Harvard Art Museums (USA)" and query:
-    st.subheader("🎓 Harvard Art Museums Results")
-    api_key = "apikey=DEMO_KEY"  # Harvard allows demo usage
-    url = f"https://api.harvardartmuseums.org/object?{api_key}&q={query}&size=5"
-    response = requests.get(url).json()
+# -------------------------------
+# 🏛️ Rijksmuseum API (Netherlands)
+# -------------------------------
+st.header("🇳🇱 Rijksmuseum")
+rijks_api_key = "0fiuZFh4"  # Replace with your key if needed
+rijks_url = f"https://www.rijksmuseum.nl/api/en/collection?key={rijks_api_key}&q={query}&imgonly=True"
 
-    if "records" not in response or len(response["records"]) == 0:
-        st.warning("No artworks found at Harvard Art Museums.")
+try:
+    rijks_data = requests.get(rijks_url, timeout=10).json()
+    artworks = rijks_data.get("artObjects", [])
+    if not artworks:
+        st.warning("No artworks found in Rijksmuseum.")
     else:
-        for rec in response["records"]:
-            st.image(rec.get("primaryimageurl"), width=300)
-            st.markdown(f"**Title:** {rec.get('title', 'Untitled')}")
-            st.markdown(f"**Artist:** {rec.get('people', [{}])[0].get('name', 'Unknown') if rec.get('people') else 'Unknown'}")
-            st.markdown(f"**Date:** {rec.get('dated', 'Unknown')}")
-            st.markdown(f"**Medium:** {rec.get('medium', 'Unknown')}")
-            st.divider()
+        for art in artworks[:3]:
+            show_artwork_card(
+                art.get("title"),
+                art.get("principalOrFirstMaker"),
+                art.get("longTitle"),
+                art.get("webImage", {}).get("url"),
+                "Rijksmuseum"
+            )
+except Exception as e:
+    st.error(f"⚠️ Rijksmuseum API error: {e}")
 
-# -----------------------------
-# 🌸 Footer
-# -----------------------------
-st.markdown("---")
-st.caption("Created by Hyeongwol • Powered by Streamlit + Open Museum APIs")
+st.success("✅ Search completed. Enjoy exploring art around the world!")
+
